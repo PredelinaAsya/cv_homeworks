@@ -9,3 +9,8 @@ pip-delete-this-directory.txt
 
 # Jupyter Notebook
 .ipynb_checkpoints
+
+.idea
+bike_translation_slow
+fox_head_short
+room

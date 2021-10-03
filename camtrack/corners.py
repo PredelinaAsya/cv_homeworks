@@ -48,15 +48,51 @@ class _CornerStorageBuilder:
 
 def _build_impl(frame_sequence: pims.FramesSequence,
                 builder: _CornerStorageBuilder) -> None:
-    # TODO
-    image_0 = frame_sequence[0]
+    feature_params = dict(maxCorners=None,
+                          qualityLevel=0.05,
+                          minDistance=7,
+                          blockSize=7)
+
+    lk_params = dict(winSize=(15, 15),
+                     maxLevel=2,
+                     criteria=(cv2.TERM_CRITERIA_COUNT | cv2.TERM_CRITERIA_EPS, 10, 0.01))
+
+    image_0 = (frame_sequence[0] * 255.0).astype(np.uint8)
+
+    p0 = cv2.goodFeaturesToTrack(image_0, mask=None, **feature_params).reshape((-1, 2))
+
     corners = FrameCorners(
-        np.array([0]),
-        np.array([[0, 0]]),
-        np.array([55])
+        np.arange(len(p0)),
+        p0,
+        np.array([feature_params['blockSize']] * len(p0))
     )
     builder.set_corners_at_frame(0, corners)
+
     for frame, image_1 in enumerate(frame_sequence[1:], 1):
+        image_1 = (image_1 * 255.0).astype(np.uint8)
+        p1, st, err = cv2.calcOpticalFlowPyrLK(image_0, image_1, corners.points,
+                                               None, **lk_params, minEigThreshold=1.5 * 1e-3)
+        corners = FrameCorners(
+            corners.ids[st == 1],
+            p1[np.hstack((st, st)) == 1].reshape((-1, 2)),
+            corners.sizes[st == 1]
+        )
+
+        if frame % 5 == 0:
+            new_mask = np.full(image_1.shape, 255).astype(np.uint8)
+            curr_corners = corners.points.round().astype(np.uint8)
+            for i in range(curr_corners.shape[0]):
+                cv2.circle(new_mask, (curr_corners[i, 0], curr_corners[i, 1]), corners.sizes[i, 0], 0, -1)
+
+            p2 = cv2.goodFeaturesToTrack(image_1, mask=new_mask, **feature_params).reshape((-1,2))
+            last_id = corners.ids.max()
+            new_ids = np.arange(last_id + 1, len(p2) + last_id + 1).reshape((-1,1))
+            new_sz = np.array([feature_params['blockSize']] * len(p2)).reshape((-1,1))
+            corners = FrameCorners(
+                np.concatenate((corners.ids, new_ids)),
+                np.concatenate((corners.points, p2)),
+                np.concatenate((corners.sizes, new_sz))
+            )
         builder.set_corners_at_frame(frame, corners)
         image_0 = image_1
 
@@ -65,7 +101,6 @@ def build(frame_sequence: pims.FramesSequence,
           progress: bool = True) -> CornerStorage:
     """
     Build corners for all frames of a frame sequence.
-
     :param frame_sequence: grayscale float32 frame sequence.
     :param progress: enable/disable building progress bar.
     :return: corners for all frames of given sequence.
