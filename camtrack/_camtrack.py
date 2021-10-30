@@ -288,7 +288,8 @@ class PointCloudBuilder:
                                           indices=True)
         self.points[idx_1] = points[idx_2]
         self._ids = np.vstack((self.ids, np.delete(ids, idx_2, axis=0)))
-        self._points = np.vstack((self.points, np.delete(points, idx_2, axis=0)))
+        self._points = np.vstack((self.points,
+                                  np.delete(points, idx_2, axis=0)))
         self._sort_data()
 
     def set_colors(self, colors: np.ndarray) -> None:
